@@ -43,7 +43,8 @@ class Crawler:
         current.capture()
         if not isinstance(current, Website):
             return current
-        to_be_added = set(filter(lambda x: not (x.captured or x in self._remaining_sites), current.linked_sites.values()))
+        to_be_added = set(
+            filter(lambda x: not (x.captured or x in self._remaining_sites), current.linked_sites.values()))
         self._remaining_sites |= to_be_added
         return current
 
@@ -61,6 +62,21 @@ class Crawler:
 
     def current_remaining(self) -> int:
         return len(self._remaining_sites)
+
+    def __getstate__(self):
+        return {
+            "remaining_sites": self._remaining_sites,
+            "start": self.start,
+            "entry": self.entry,
+            "all": _captured_sites,
+        }
+
+    def __setstate__(self, state):
+        global _captured_sites
+        self._remaining_sites = state["remaining_sites"]
+        self.start = state["start"]
+        self.entry = state["entry"]
+        _captured_sites = state["all"]
 
 
 class Site:
@@ -112,6 +128,7 @@ class Site:
 
     def __str__(self):
         return f"<{self.__class__.__name__}: {self.url}>"
+
     def __repr__(self):
         return str(self)
 

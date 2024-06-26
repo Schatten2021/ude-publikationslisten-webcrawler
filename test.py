@@ -1,5 +1,6 @@
 import logging
 
+import app
 from app.crawler import Crawler
 from app import crawler
 
@@ -34,12 +35,18 @@ if __name__ == '__main__':
     logging.getLogger("webcrawler").setLevel(logging.INFO)
     logger = logging.getLogger("test")
     logger.setLevel(logging.DEBUG)
-    crawler = Crawler("https://www.uni-due.de")
-    count: int = 0
-    for site in crawler:
-        count += 1
-        logger.info(f"Crawled site {count}. {crawler.current_remaining()} remaining (currently {count / (count + crawler.current_remaining()) * 100:.2f}% done) (\"{site.url}\")")
-    crawler.save("website_cache.cache")
+    crawler = Crawler.load("website_cache.cache")
+    count: int = len(list(filter(lambda site: site.captured, app.crawler._captured_sites.values())))
+    try:
+        for site in crawler:
+            count += 1
+            logger.info(f"Crawled site {count}. {crawler.current_remaining()} remaining (currently {count / (count + crawler.current_remaining()) * 100:.2f}% done) (\"{site.url}\")")
+            if count % 10 == 0:
+                crawler.save("website_cache.cache")
+    finally:
+        print("Saving")
+        crawler.save("website_cache.cache")
+        print("Saved")
     loaded_crawler = Crawler.load("website_cache.cache")
     print("finished script")
 
