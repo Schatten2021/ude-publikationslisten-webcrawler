@@ -28,13 +28,13 @@ def build_url(base: str, url: str) -> str | None:
 
 
 class Crawler:
-    _remaining_sites: list["Site"]
+    _remaining_sites: set["Site"]
 
     def __init__(self, start: str):
         self.start = start
         self.entry = Site(start)
         _captured_sites[self.entry.url] = self.entry
-        self._remaining_sites = [self.entry]
+        self._remaining_sites = {self.entry}
 
     def __next__(self):
         if len(self._remaining_sites) == 0:
@@ -43,7 +43,8 @@ class Crawler:
         current.capture()
         if not isinstance(current, Website):
             return current
-        self._remaining_sites.extend(filter(lambda x: x.captured, current.linked_sites.values()))
+        to_be_added = set(filter(lambda x: not (x.captured or x in self._remaining_sites), current.linked_sites.values()))
+        self._remaining_sites |= to_be_added
         return current
 
     def __iter__(self):
@@ -58,6 +59,9 @@ class Crawler:
         with open(file, "rb") as f:
             return pickle.load(f)
 
+    def current_remaining(self) -> int:
+        return len(self._remaining_sites)
+
 
 class Site:
     def __init__(self, url: str):
@@ -66,12 +70,28 @@ class Site:
         self.captured = False
 
     def capture(self):
-        self.request = requests.get(self.url)
-        logger.debug("Capturing url %s", self.url)
-        if 'text/html' in self.request.headers['Content-Type']:
-            self.__class__ = Website
-        self.post_capture()
         self.captured = True
+        try:
+            self.request = requests.get(self.url)
+        except requests.exceptions.SSLError as e:
+            logger.error(f"Couldn't verify ssl-certificate of {self.url} ({e})")
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"Couldn't connect to {self.url} due to a connection error ({e})")
+        except requests.exceptions.HTTPError as e:
+            logger.error(f"Couldn't get {self.url} due to {e} because the server returned an invalid response ({e})")
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Connection to {self.url} timed out ({e})")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Couldn't get {self.url} due to {e}")
+        except Exception as e:
+            if isinstance(e, KeyboardInterrupt):
+                raise e
+            logger.error(f"Error trying to get {self.url}: {e}")
+        else:
+            logger.debug("Capturing url %s", self.url)
+            if 'text/html' in self.request.headers['Content-Type']:
+                self.__class__ = Website
+            self.post_capture()
 
     @abstractmethod
     def post_capture(self):
@@ -90,6 +110,11 @@ class Site:
         self.request = state["request"]
         self.post_capture()
 
+    def __str__(self):
+        return f"<{self.__class__.__name__}: {self.url}>"
+    def __repr__(self):
+        return str(self)
+
 
 class Website(Site):
     raw: str
@@ -103,9 +128,6 @@ class Website(Site):
 
     def post_capture(self):
         self.raw = self.request.text
-        self.load_links()
-
-    def load_links(self):
         self.soup = BeautifulSoup(self.raw, 'html.parser')
         self.link_elements = self.soup.find_all('a', href=True)
         self.links = [elem["href"] for elem in self.link_elements]

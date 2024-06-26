@@ -31,10 +31,14 @@ if __name__ == '__main__':
     stream_handler.setLevel(logging.DEBUG)
     stream_handler.setFormatter(CustomFormatter())
     logging.basicConfig(handlers=[stream_handler])
-    logging.getLogger("webcrawler").setLevel(logging.DEBUG)
+    logging.getLogger("webcrawler").setLevel(logging.INFO)
+    logger = logging.getLogger("test")
+    logger.setLevel(logging.DEBUG)
     crawler = Crawler("https://www.uni-due.de")
-    for _ in zip(crawler, range(1, 100)):
-        continue
+    count: int = 0
+    for site in crawler:
+        count += 1
+        logger.info(f"Crawled site {count}. {crawler.current_remaining()} remaining (currently {count / (count + crawler.current_remaining()) * 100:.2f}% done) (\"{site.url}\")")
     crawler.save("website_cache.cache")
     loaded_crawler = Crawler.load("website_cache.cache")
     print("finished script")
