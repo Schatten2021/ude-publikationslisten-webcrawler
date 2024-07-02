@@ -2,6 +2,7 @@ import logging
 import pickle
 import re
 from abc import abstractmethod
+from time import sleep
 from typing import Union
 from urllib.parse import urljoin, urlsplit
 
@@ -92,14 +93,15 @@ class Site:
         self.captured = True
         try:
             self.request = requests.get(self.url)
+        except requests.exceptions.Timeout as e:
+            logger.error(f"Connection to {self.url} timed out ({e})")
+            sleep(60)  # wait a minute so that if the servers crashed, they have time to get back up.
         except requests.exceptions.SSLError as e:
             logger.error(f"Couldn't verify ssl-certificate of {self.url} ({e})")
         except requests.exceptions.ConnectionError as e:
             logger.error(f"Couldn't connect to {self.url} due to a connection error ({e})")
         except requests.exceptions.HTTPError as e:
             logger.error(f"Couldn't get {self.url} due to {e} because the server returned an invalid response ({e})")
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Connection to {self.url} timed out ({e})")
         except requests.exceptions.RequestException as e:
             logger.error(f"Couldn't get {self.url} due to {e}")
         except Exception as e:

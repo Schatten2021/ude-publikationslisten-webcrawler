@@ -1,4 +1,5 @@
 import logging
+from time import sleep
 
 import app
 from app.crawler import Crawler
@@ -43,6 +44,7 @@ if __name__ == '__main__':
             logger.info(f"Crawled site {count}. {crawler.current_remaining()} remaining (currently {count / (count + crawler.current_remaining()) * 100:.2f}% done) (\"{site.url}\")")
             if count % 100 == 0:
                 crawler.save("website_cache.cache")
+            sleep(1)
     finally:
         print("Saving")
         crawler.save("website_cache.cache")
