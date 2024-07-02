@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup, ResultSet
+from requests import Response
 
 _website_capture_regex: re.Pattern = re.compile(r"(https?://)?[A-Za-z0-9.\-_@+\[\]{}]*\.[a-zA-Z]{2,4}.*")
 _ude_url_capture_regex: re.Pattern = re.compile(r"(https?://)?([A-Za-z0-9.\-_@+\[\]{}]*\.)?uni-due.de(/.*)?")
@@ -68,7 +69,7 @@ class Crawler:
             "remaining_sites": self._remaining_sites,
             "start": self.start,
             "entry": self.entry,
-            "all": _captured_sites,
+            "all": {url: site.__getstate__() for url, site in _captured_sites.items()},
         }
 
     def __setstate__(self, state):
@@ -76,7 +77,9 @@ class Crawler:
         self._remaining_sites = state["remaining_sites"]
         self.start = state["start"]
         self.entry = state["entry"]
-        _captured_sites = state["all"]
+        for url, site in state["all"].items():
+            _captured_sites[url] = Site(url)
+            _captured_sites[url].__setstate__(site)
 
 
 class Site:
@@ -105,7 +108,7 @@ class Site:
             logger.error(f"Error trying to get {self.url}: {e}")
         else:
             logger.debug("Capturing url %s", self.url)
-            if 'text/html' in self.request.headers['Content-Type']:
+            if 'text/html' in self.request.headers.get("Content-Type", ""):
                 self.__class__ = Website
             self.post_capture()
 
@@ -117,13 +120,20 @@ class Site:
         return {
             "url": self.url,
             "captured": self.captured,
-            "request": self.request,
+            "request": self.request.__getstate__() if self.request is not None else None,
         }
 
     def __setstate__(self, state):
         self.url = state["url"]
         self.captured = state["captured"]
-        self.request = state["request"]
+        if state["request"] is not None:
+            self.request = Response()
+            self.request.__setstate__(state["request"])
+        else:
+            self.request = None
+        if self.request is not None:
+            if 'text/html' in self.request.headers.get("Content-Type", ""):
+                self.__class__ = Website
         self.post_capture()
 
     def __str__(self):
@@ -144,14 +154,16 @@ class Website(Site):
         super().__init__(url)
 
     def post_capture(self):
-        self.raw = self.request.text
-        self.soup = BeautifulSoup(self.raw, 'html.parser')
-        self.link_elements = self.soup.find_all('a', href=True)
-        self.links = [elem["href"] for elem in self.link_elements]
+        link_elements = self.soup.find_all('a', href=True)
+        links = [elem["href"] for elem in link_elements]
         self.linked_sites = {}
-        for link in self.links:
+        for link in links:
             url = build_url(self.url, link)
             if url is None:
                 continue
             _captured_sites.setdefault(url, Site(url))
             self.linked_sites[url] = _captured_sites[url]
+
+    @property
+    def soup(self) -> BeautifulSoup:
+        return BeautifulSoup(self.request.text, 'html.parser')
