@@ -47,9 +47,8 @@ if __name__ == '__main__':
             sleep(1)
     finally:
         print("Saving")
-        crawler.save("website_cache.cache")
+        crawler.save("main.crawler")
         print("Saved")
-    loaded_crawler = Crawler.load("Cache_old/website_cache.cache")
     print("finished script")
 
 doi_regex: str = r"10.[0-9]{4}-[0-9]{2}-[0-9]{2}"
