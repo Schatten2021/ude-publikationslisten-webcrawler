@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlsplit
 
 import requests
 from bs4 import BeautifulSoup, ResultSet
-from requests import Response
+from requests import Response, Session
 
 _website_capture_regex: re.Pattern = re.compile(r"(https?://)?[A-Za-z0-9.\-_@+\[\]{}]*\.[a-zA-Z]{2,4}.*")
 _ude_url_capture_regex: re.Pattern = re.compile(r"(https?://)?([A-Za-z0-9.\-_@+\[\]{}]*\.)?uni-due.de(/.*)?")
@@ -16,6 +16,7 @@ _filtered_urls_regex: re.Pattern = re.compile(r"(mailto:.*)|(javascript:.*)|(ftp
 _ude_host_regex: re.Pattern = re.compile(r"(.*\.)uni-due.de")
 
 logger = logging.getLogger("webcrawler")
+session = Session()
 
 request_save_base_path = "./sites"
 captured_sites: dict[str, "Site"] = {}
@@ -93,7 +94,7 @@ class Site:
     def capture(self):
         self.captured = True
         try:
-            self.request = requests.get(self.url)
+            self.request = session.get(self.url)
         except requests.exceptions.Timeout as e:
             logger.error(f"Connection to {self.url} timed out ({e})")
             sleep(60)  # wait a minute so that if the servers crashed, they have time to get back up.
