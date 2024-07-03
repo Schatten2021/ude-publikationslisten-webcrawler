@@ -1,9 +1,9 @@
 import logging
+import os.path
 import pickle
 import re
 from abc import abstractmethod
 from time import sleep
-from typing import Union
 from urllib.parse import urljoin, urlsplit
 
 import requests
@@ -17,7 +17,8 @@ _ude_host_regex: re.Pattern = re.compile(r"(.*\.)uni-due.de")
 
 logger = logging.getLogger("webcrawler")
 
-_captured_sites: dict[str, "Site"] = {}
+request_save_base_path = "./sites"
+captured_sites: dict[str, "Site"] = {}
 
 
 def build_url(base: str, url: str) -> str | None:
@@ -25,7 +26,6 @@ def build_url(base: str, url: str) -> str | None:
     if not _ude_host_regex.fullmatch(split_url.netloc) or split_url.scheme not in ["http", "https"]:
         return None
     final_url = "https://" + split_url.netloc + split_url.path
-    # logger.debug(f"parsed url for {final_url}")
     return final_url
 
 
@@ -35,7 +35,7 @@ class Crawler:
     def __init__(self, start: str):
         self.start = start
         self.entry = Site(start)
-        _captured_sites[self.entry.url] = self.entry
+        captured_sites[self.entry.url] = self.entry
         self._remaining_sites = {self.entry}
 
     def __next__(self):
@@ -70,23 +70,24 @@ class Crawler:
             "remaining_sites": self._remaining_sites,
             "start": self.start,
             "entry": self.entry,
-            "all": {url: site.__getstate__() for url, site in _captured_sites.items()},
+            "all": {url: site.__getstate__() for url, site in captured_sites.items()},
         }
 
     def __setstate__(self, state):
-        global _captured_sites
+        global captured_sites
         self._remaining_sites = state["remaining_sites"]
         self.start = state["start"]
         self.entry = state["entry"]
+
         for url, site in state["all"].items():
-            _captured_sites[url] = Site(url)
-            _captured_sites[url].__setstate__(site)
+            captured_sites[url] = Site(url)
+            captured_sites[url].__setstate__(site)
 
 
 class Site:
     def __init__(self, url: str):
-        self.request = None
         self.url = url
+        self.file_path = os.path.join(request_save_base_path, self.url, "site.request")
         self.captured = False
 
     def capture(self):
@@ -119,23 +120,20 @@ class Site:
         ...
 
     def __getstate__(self):
-        return {
+        state = {
             "url": self.url,
             "captured": self.captured,
-            "request": self.request.__getstate__() if self.request is not None else None,
         }
+        return state
 
     def __setstate__(self, state):
         self.url = state["url"]
-        self.captured = state["captured"]
-        if state["request"] is not None:
-            self.request = Response()
-            self.request.__setstate__(state["request"])
-        else:
-            self.request = None
-        if self.request is not None:
-            if 'text/html' in self.request.headers.get("Content-Type", ""):
-                self.__class__ = Website
+        self.file_path = os.path.join(request_save_base_path, self.url, "site.request")
+        self.captured = state["captured"] or self.request is not None
+        if self.request is None:
+            return
+        if 'text/html' in self.request.headers.get("Content-Type", ""):
+            self.__class__ = Website
         self.post_capture()
 
     def __str__(self):
@@ -143,6 +141,19 @@ class Site:
 
     def __repr__(self):
         return str(self)
+
+    @property
+    def request(self) -> Response | None:
+        if not os.path.isfile(self.file_path):
+            return None
+        with open(self.file_path, "rb") as f:
+            return pickle.load(f)
+
+    @request.setter
+    def request(self, value: Response):
+        os.makedirs(os.path.dirname(self.file_path), exist_ok=True)
+        with open(self.file_path, "wb") as f:
+            pickle.dump(value, f)
 
 
 class Website(Site):
@@ -163,8 +174,8 @@ class Website(Site):
             url = build_url(self.url, link)
             if url is None:
                 continue
-            _captured_sites.setdefault(url, Site(url))
-            self.linked_sites[url] = _captured_sites[url]
+            captured_sites.setdefault(url, Site(url))
+            self.linked_sites[url] = captured_sites[url]
 
     @property
     def soup(self) -> BeautifulSoup:

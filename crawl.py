@@ -36,8 +36,8 @@ if __name__ == '__main__':
     logging.getLogger("webcrawler").setLevel(logging.INFO)
     logger = logging.getLogger("test")
     logger.setLevel(logging.DEBUG)
-    crawler = Crawler.load("website_cache.cache")
-    count: int = len(list(filter(lambda site: site.captured, app.crawler._captured_sites.values())))
+    crawler = Crawler.load("main.crawler")
+    count: int = len(list(filter(lambda site: site.captured, app.crawler.captured_sites.values())))
     try:
         for site in crawler:
             count += 1
@@ -49,7 +49,7 @@ if __name__ == '__main__':
         print("Saving")
         crawler.save("website_cache.cache")
         print("Saved")
-    loaded_crawler = Crawler.load("website_cache.cache")
+    loaded_crawler = Crawler.load("Cache_old/website_cache.cache")
     print("finished script")
 
 doi_regex: str = r"10.[0-9]{4}-[0-9]{2}-[0-9]{2}"
